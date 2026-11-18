@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Online Examination System – Sign in</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="center-page">
+<main class="login-card">
+  <div class="brand-mark">🎓</div>
+  <h1>Online Examination System</h1>
+  <p class="muted">Sign in with the username and password given by your administrator.</p>
+  <form id="loginForm" class="stack">
+    <label>Username
+      <input id="username" required autocomplete="username" placeholder="e.g. cs26001">
+    </label>
+    <label>Password
+      <input id="password" type="password" required autocomplete="current-password">
+    </label>
+    <button class="btn btn-block" type="submit">Sign in</button>
+  </form>
+  <p class="muted small" style="margin-top:16px">Administrators: sign in with your admin email address.</p>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="js/config.js"></script>
+<script src="js/common.js"></script>
+<script src="js/login.js"></script>
+</body>
+</html>

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin Dashboard – Online Exams</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<header class="topbar no-print">
+  <div class="brand">🎓 Exam Admin</div>
+  <div class="who">Signed in as <span id="whoami"></span></div>
+  <button class="btn btn-ghost btn-sm" id="logout">Logout</button>
+</header>
+
+<main class="container">
+  <div class="tabs no-print">
+    <button class="tab active" data-tab="students">1 · Students</button>
+    <button class="tab" data-tab="exams">2 · Exams</button>
+    <button class="tab" data-tab="questions">3 · Questions</button>
+    <button class="tab" data-tab="results">4 · Results</button>
+  </div>
+
+  <!-- ================= STUDENTS ================= -->
+  <section id="tab-students" class="tab-panel">
+    <div class="card no-print">
+      <h2>Generate student accounts</h2>
+      <p class="muted">Creates usernames such as <code>cs26001</code> with random passwords. Students must change their password at first login.</p>
+      <form id="genForm" class="grid-2">
+        <label>Username prefix
+          <input id="prefix" value="cs26" required>
+        </label>
+        <label>Starting number
+          <input id="startNo" type="number" value="1" min="1">
+        </label>
+        <label>How many students
+          <input id="count" type="number" value="30" min="1" max="200">
+        </label>
+        <label>Full names (optional, one per line – if given, this sets the count)
+          <textarea id="names" style="min-height:96px"></textarea>
+        </label>
+        <div style="grid-column:1/-1">
+          <button class="btn" id="genBtn" type="submit">Generate accounts</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card cred-box" id="credBox" hidden>
+      <h2>New credentials</h2>
+      <p class="notice">Passwords are shown only now. Download or print the list before you leave this page.</p>
+      <div class="actions no-print" style="margin-bottom:12px">
+        <button class="btn btn-sm" id="dlCreds">Download CSV</button>
+        <button class="btn btn-sm btn-ghost" id="printCreds">Print</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>Username</th><th>Password</th><th>Name</th></tr></thead>
+          <tbody id="credBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Students <span class="badge" id="studentCount">0</span></h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>Username</th><th>Name</th><th>Status</th><th>Created</th><th></th></tr></thead>
+          <tbody id="studentsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= EXAMS ================= -->
+  <section id="tab-exams" class="tab-panel" hidden>
+    <div class="card">
+      <h2>Create an exam</h2>
+      <form id="examForm" class="grid-2">
+        <label>Title <input id="exTitle" required placeholder="e.g. Mid Exam"></label>
+        <label>Course <input id="exCourse" placeholder="e.g. Mobile Application Development"></label>
+        <label>Duration (minutes) <input id="exDuration" type="number" value="60" min="1" required></label>
+        <label>Pass mark (%) <input id="exPass" type="number" value="50" min="0" max="100" required></label>
+        <label>Opens at <input id="exOpens" type="datetime-local"></label>
+        <label>Closes at <input id="exCloses" type="datetime-local"></label>
+        <label style="display:flex;align-items:center;gap:8px">
+          <input id="exPublished" type="checkbox" style="width:auto"> Publish immediately
+        </label>
+        <div style="grid-column:1/-1"><button class="btn" type="submit">Create exam</button></div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>All exams</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Exam</th><th>Settings</th><th>Questions</th><th>Window</th><th>Status</th><th></th></tr></thead>
+          <tbody id="examsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= QUESTIONS ================= -->
+  <section id="tab-questions" class="tab-panel" hidden>
+    <div class="card">
+      <h2>Upload questions</h2>
+      <label>Exam
+        <select id="qExam"></select>
+      </label>
+      <p class="muted small" style="margin:12px 0 6px">Paste questions in this format (or upload a .txt file). Each block needs an <code>Answer:</code> line.</p>
+      <pre class="format-hint">Q1. What is the SI unit of force?
+A. Joule
+B. Newton
+C. Watt
+D. Pascal
+Answer: B</pre>
+      <label>Questions
+        <textarea id="qText" placeholder="Paste questions here…"></textarea>
+      </label>
+      <div class="actions" style="margin-top:12px">
+        <input id="qFile" type="file" accept=".txt" style="width:auto">
+        <button class="btn btn-ghost" id="previewBtn">Preview</button>
+        <button class="btn" id="saveBtn">Save questions</button>
+      </div>
+      <div id="previewBox" class="card" hidden style="margin-top:16px"></div>
+    </div>
+
+    <div class="card">
+      <h2>Questions in this exam <span class="badge" id="qCount">0</span></h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>Question</th><th>Answer</th><th></th></tr></thead>
+          <tbody id="qTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= RESULTS ================= -->
+  <section id="tab-results" class="tab-panel" hidden>
+    <div class="card">
+      <div class="row-between" style="margin-top:0">
+        <h2 style="margin:0">Results</h2>
+        <div class="actions no-print">
+          <select id="resExam" style="width:260px"></select>
+          <button class="btn btn-sm" id="exportRes">Export CSV</button>
+        </div>
+      </div>
+      <div class="stats" id="resStats" style="margin-top:16px"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>Username</th><th>Name</th><th>Score</th><th>%</th><th>Result</th><th>Warnings</th><th>Submitted</th></tr></thead>
+          <tbody id="resBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="../js/config.js"></script>
+<script src="../js/common.js"></script>
+<script src="../js/parser.js"></script>
+<script src="../js/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Exam</title>
+<link rel="stylesheet" href="../css/style.css">
+<link rel="stylesheet" href="../css/exam.css">
+</head>
+<body class="exam-page">
+
+<header class="exam-top">
+  <div class="exam-head">
+    <div class="exam-title" id="examTitle">Loading exam…</div>
+    <div class="small muted" id="examMeta"></div>
+  </div>
+  <div class="warn-pill" id="warnPill">⚠ Warnings <b id="vCount">0</b>/<span id="maxV">3</span></div>
+  <div class="timer" id="timer">--:--</div>
+  <button class="btn btn-submit js-submit" type="button">Submit exam</button>
+</header>
+
+<main class="exam-wrap" id="examWrap">
+  <div class="review-bar" id="reviewBar" hidden></div>
+
+  <!-- Question navigator -->
+  <section class="panel">
+    <div class="nav-head">
+      <h3>Question navigator</h3>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div class="nav-grid" id="navGrid"></div>
+  </section>
+
+  <!-- Current question -->
+  <section class="panel">
+    <div class="qtop">
+      <span class="qlabel" id="qLabel">Question 1</span>
+      <button class="flag-btn" id="flagBtn" type="button">🚩 Flag as hard</button>
+    </div>
+    <h2 class="qtext" id="qText"></h2>
+    <div class="opts" id="qOpts"></div>
+
+    <div class="qnav">
+      <button class="btn-prev" id="prevBtn" type="button">← Previous</button>
+      <span class="small muted" id="progress"></span>
+      <button class="btn-next" id="nextBtn" type="button">Next →</button>
+    </div>
+  </section>
+</main>
+
+<!-- Shown after submit (result card) or on errors -->
+<section class="exam-wrap" id="resultBox" hidden></section>
+
+<!-- Full-screen gate -->
+<div class="overlay" id="fsOverlay" hidden>
+  <div class="overlay-card">
+    <div style="font-size:44px">🖥️</div>
+    <h2>Full-screen required</h2>
+    <p id="fsMsg"></p>
+    <button class="btn btn-lg" id="enterFsBtn" type="button">Enter full-screen</button>
+    <p class="small muted" style="margin-top:14px">
+      Leaving full-screen, switching tabs or copying is recorded. After <span id="maxV2">3</span>
+      warnings your exam is submitted automatically.
+    </p>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="../js/config.js"></script>
+<script src="../js/common.js"></script>
+<script src="../js/exam.js"></script>
+</body>
+</html>

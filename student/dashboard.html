@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My Exams – Student Portal</title>
+<link rel="stylesheet" href="../css/style.css">
+<link rel="stylesheet" href="../css/dashboard.css">
+</head>
+<body class="dash">
+
+<header class="dash-top">
+  <div class="dash-brand">
+    <div class="dash-logo">🎓</div>
+    <div><b>Student Portal</b><small>Online examinations</small></div>
+  </div>
+  <div class="dash-user">
+    <div class="avatar" id="avatar">?</div>
+    <div class="who-text">
+      <span class="who-label">Signed in as</span>
+      <span class="who" id="welcome">Loading…</span>
+    </div>
+    <button class="btn" id="logout" type="button">Logout</button>
+  </div>
+</header>
+
+<main class="dash-wrap">
+
+  <section class="hero">
+    <p class="hero-date" id="today"></p>
+    <h1 id="greet">Welcome back</h1>
+    <p class="hero-sub" id="heroSub">Loading your exams…</p>
+  </section>
+
+  <section class="stats">
+    <div class="stat s-blue"><div class="stat-ico">📝</div><div><b id="statAvail">0</b><span>Available / in progress</span></div></div>
+    <div class="stat s-green"><div class="stat-ico"></div><div><b id="statDone">0</b><span>Completed</span></div></div>
+    <div class="stat s-amber"><div class="stat-ico">📊</div><div><b id="statAvg">—</b><span>Average score</span></div></div>
+    <div class="stat s-rose"><div class="stat-ico">🏆</div><div><b id="statPass">—</b><span>Pass rate</span></div></div>
+  </section>
+
+  <div class="sec-head">
+    <h2>My exams</h2>
+    <span class="sec-count" id="examCount"></span>
+  </div>
+  <div class="exam-grid" id="examGrid"><p class="muted">Loading exams…</p></div>
+
+  <p class="dash-foot">Your answers are saved on the server. Review them any time after you submit.</p>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="../js/config.js"></script>
+<script src="../js/common.js"></script>
+<script src="../js/student.js"></script>
+</body>
+</html>
