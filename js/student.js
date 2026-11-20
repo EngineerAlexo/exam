@@ -87,7 +87,12 @@ function dashCard(e, a, now) {
   $('today').textContent = new Date().toLocaleDateString(undefined, {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
   });
-  $('logout').onclick = logout;
+  $('logout').onclick = async (e) => {
+    e.preventDefault();
+    $('logout').disabled = true;
+    $('logout').textContent = 'Logging out…';
+    await logout();
+  };
 
   const [{ data: exams, error: e1 }, { data: attempts, error: e2 }] = await Promise.all([
     sb.from('exams').select('*').eq('published', true).order('opens_at', { ascending: true, nullsFirst: true }),

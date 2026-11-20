@@ -42,23 +42,32 @@ function downloadCSV(filename, rows) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// Fetch user profile and securely verify that the auth session is actually valid
 async function getProfile() {
-  const { data: { session } } = await sb.auth.getSession();
-  if (!session) return null;
-  const { data } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
-  return data;
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return null;
+
+    // Validate with server
+    const { data: { user }, error: userErr } = await sb.auth.getUser();
+    if (userErr || !user) {
+      try { await sb.auth.signOut({ scope: 'local' }); } catch (e) {}
+      return null;
+    }
+
+    const { data } = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
+    return data;
+  } catch (err) {
+    console.warn('getProfile error:', err);
+    return null;
+  }
 }
 
 // Protects a page. role = 'student' | 'admin'
 async function guard(role) {
-  const { data: { session } } = await sb.auth.getSession();
-  if (!session) { location.replace(ROOT + 'index.html'); return null; }
-
   const p = await getProfile();
   if (!p) {
-    toast('This account has no profile. Contact the administrator.', 'error');
-    await sb.auth.signOut();
-    location.replace(ROOT + 'index.html');
+    await logout();
     return null;
   }
   if (p.role !== role) {
@@ -72,7 +81,24 @@ async function guard(role) {
   return p;
 }
 
+// Absolute, robust logout that clears all cached tokens and stops redirect loops
 async function logout() {
-  await sb.auth.signOut();
-  location.replace(ROOT + 'index.html');
+  try {
+    await sb.auth.signOut({ scope: 'local' });
+  } catch (e) {}
+  try {
+    await sb.auth.signOut();
+  } catch (e) {}
+
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('sb-') || key.includes('auth-token') || key.startsWith('exam-'))) {
+        localStorage.removeItem(key);
+      }
+    }
+    sessionStorage.clear();
+  } catch (e) {}
+
+  location.replace(ROOT + 'index.html?logged_out=1');
 }

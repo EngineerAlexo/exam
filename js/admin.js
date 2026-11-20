@@ -6,15 +6,31 @@
   const p = await guard('admin');
   if (!p) return;
   $('whoami').textContent = p.username;
-  $('logout').onclick = logout;
+  $('logout').onclick = async (e) => {
+    e.preventDefault();
+    $('logout').disabled = true;
+    $('logout').textContent = 'Logging out…';
+    await logout();
+  };
 
   // Calls the Edge Function directly so we can report the real cause of a failure.
   // (The function holds the service key on the server side only.)
   const FN_URL = `${SUPABASE_URL}/functions/v1/create-students`;
 
   async function callFn(body) {
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session) throw new Error('Your session expired. Please sign in again.');
+    let { data: { session } } = await sb.auth.getSession();
+    if (!session) {
+      toast('Session expired. Signing out…', 'error');
+      setTimeout(logout, 1200);
+      throw new Error('Your session expired. Please sign in again.');
+    }
+
+    // Refresh token if near expiration or expired
+    const exp = session.expires_at ? session.expires_at * 1000 : 0;
+    if (exp && Date.now() > exp - 60000) {
+      const { data: ref } = await sb.auth.refreshSession();
+      if (ref?.session) session = ref.session;
+    }
 
     let res;
     try {
@@ -37,7 +53,11 @@
     try { json = await res.json(); } catch { /* empty body */ }
 
     if (res.status === 404) throw new Error('create-students is not deployed in this project (404).');
-    if (res.status === 401) throw new Error('Not authorised. Sign out, sign in again, and retry.');
+    if (res.status === 401) {
+      toast('Your session expired. Signing you out to sign in again…', 'error');
+      setTimeout(logout, 1500);
+      throw new Error('Not authorised. Sign out, sign in again, and retry.');
+    }
     if (!res.ok || json.error) throw new Error(json.error || `Request failed with status ${res.status}`);
     return json;
   }
