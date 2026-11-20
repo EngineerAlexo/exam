@@ -15,11 +15,11 @@ declare
   deleted text[] := array[]::text[];
 begin
   if not is_admin() then
-    raise exception 'Admins only.';
+    raise exception 'Access denied: Admin role required.';
   end if;
 
   foreach u in array p_usernames loop
-    select id into v_id from profiles where username = lower(trim(u)) and role = 'student';
+    select id into v_id from profiles where lower(username) = lower(trim(u)) and role = 'student';
     if found then
       -- Deleting from auth.users cascades to public.profiles and attempts
       delete from auth.users where id = v_id;
@@ -30,4 +30,3 @@ begin
 
   return deleted;
 end $$;
-

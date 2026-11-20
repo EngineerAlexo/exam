@@ -62,9 +62,9 @@
     return json;
   }
 
-  // ---------- tabs ----------
-  document.querySelectorAll('.tab').forEach(btn => btn.onclick = () => {
-    document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b === btn));
+  // ---------- main navigation tabs ----------
+  document.querySelectorAll('main > .tabs > .tab').forEach(btn => btn.onclick = () => {
+    document.querySelectorAll('main > .tabs > .tab').forEach(b => b.classList.toggle('active', b === btn));
     document.querySelectorAll('.tab-panel').forEach(s => (s.hidden = s.id !== 'tab-' + btn.dataset.tab));
     if (btn.dataset.tab === 'results') loadResults();
   });
@@ -206,16 +206,284 @@
       <td><code>${esc(c.password)}</code></td><td>${esc(c.full_name)}</td></tr>`).join('');
   }
 
+  // =========================================================
+  // ROLE-BASED STUDENT CREATION (Edge Function + Database RPC)
+  // =========================================================
+  async function executeCreateStudents(rows) {
+    if (!rows || !rows.length) throw new Error('No students to create.');
+    let results = null;
+
+    // 1. Try Edge Function (Admin-authenticated)
+    try {
+      const data = await callFn({ students: rows });
+      if (data && Array.isArray(data.results)) {
+        results = data.results;
+      }
+    } catch (fnErr) {
+      console.warn('Edge Function create-students failed or not deployed, trying database RPC:', fnErr);
+    }
+
+    // 2. Fallback: Database-side RPC function create_students_batch
+    if (!results) {
+      try {
+        const { data: rpcData, error: rpcErr } = await sb.rpc('create_students_batch', { p_students: rows });
+        if (rpcErr) throw new Error(rpcErr.message);
+        if (Array.isArray(rpcData)) results = rpcData;
+      } catch (rpcErr) {
+        console.error('Database RPC error:', rpcErr);
+        throw new Error(rpcErr.message || 'Could not create accounts. Please check database permissions or Edge Function.');
+      }
+    }
+
+    return results || [];
+  }
+
+  // ---------- Mode Switcher (Paste List vs Auto-Generator) ----------
+  const tabModePaste = $('tabModePaste');
+  const tabModeGen = $('tabModeGen');
+  const pasteForm = $('pasteStudentForm');
+  const genForm = $('genForm');
+
+  if (tabModePaste && tabModeGen) {
+    tabModePaste.onclick = () => {
+      tabModePaste.className = 'btn btn-sm';
+      tabModeGen.className = 'btn btn-sm btn-ghost';
+      pasteForm.hidden = false;
+      genForm.hidden = true;
+    };
+    tabModeGen.onclick = () => {
+      tabModeGen.className = 'btn btn-sm';
+      tabModePaste.className = 'btn btn-sm btn-ghost';
+      genForm.hidden = false;
+      pasteForm.hidden = true;
+    };
+  }
+
+  // ---------- Smart Student List Parser ----------
+  function looksLikeId(str) {
+    if (!str) return false;
+    const s = str.trim();
+    // Contains a slash and digits (e.g. RU0204/16, ETS/0492/15)
+    if (/\/\d+/.test(s)) return true;
+    // Contains numbers (e.g. RU0204, cs26001, 10243)
+    if (/\d/.test(s)) return true;
+    // Single alphanumeric token without spaces (e.g. ID code)
+    if (!/\s/.test(s) && /^[a-zA-Z0-9_\/-]+$/.test(s) && s.length <= 16) return true;
+    return false;
+  }
+
+  function parseStudentListText(rawText, prefix = 'RU', suffix = '/16', startNum = 1) {
+    if (!rawText || !rawText.trim()) return [];
+    const lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const parsed = [];
+    let nameOnlyIndex = 0;
+    const sNum = parseInt(startNum, 10) || 1;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      let username = '';
+      let fullName = '';
+      let isNameOnly = false;
+
+      // Delimiter detection (Tab, Comma, Semicolon, Pipe, or ' - ')
+      let parts = null;
+      if (line.includes('\t')) parts = line.split('\t');
+      else if (line.includes(',')) parts = line.split(',');
+      else if (line.includes(';')) parts = line.split(';');
+      else if (line.includes('|')) parts = line.split('|');
+      else if (/\s+-\s+/.test(line)) parts = line.split(/\s+-\s+/);
+
+      if (parts && parts.length >= 2) {
+        const p0 = parts[0].trim();
+        const p1 = parts.slice(1).join(' ').trim();
+        if (looksLikeId(p0)) {
+          username = p0;
+          fullName = p1;
+        } else if (looksLikeId(p1)) {
+          username = p1;
+          fullName = p0;
+        } else {
+          username = p0;
+          fullName = p1;
+        }
+      } else {
+        const tokens = line.split(/\s+/);
+        if (tokens.length > 1 && looksLikeId(tokens[0])) {
+          // e.g. "RU0204/16 Haile Yilma"
+          username = tokens[0];
+          fullName = tokens.slice(1).join(' ');
+        } else if (looksLikeId(line)) {
+          // e.g. "RU0204/16"
+          username = line;
+          fullName = '';
+        } else {
+          // Name only: e.g. "Haile Yilma"
+          fullName = line;
+          isNameOnly = true;
+          const num = sNum + nameOnlyIndex;
+          const numPad = String(num).padStart(4, '0');
+          username = `${prefix || ''}${numPad}${suffix || ''}`;
+          nameOnlyIndex++;
+        }
+      }
+
+      username = username.replace(/\s+/g, '');
+      if (username) {
+        parsed.push({
+          username,
+          full_name: fullName,
+          role: 'student',
+          isNameOnly
+        });
+      }
+    }
+    return parsed;
+  }
+
+  // ---------- Live Preview for Pasted List ----------
+  let currentParsedStudents = [];
+
+  function updatePastePreview() {
+    const raw = $('pasteStudentText')?.value || '';
+    const pfx = $('pastePrefix')?.value || 'RU';
+    const sfx = $('pasteSuffix')?.value || '/16';
+    const startVal = $('pasteStartNo')?.value || '0204';
+    const useDefault = $('pasteDefaultPw')?.checked !== false;
+    const defaultPw = (typeof DEFAULT_STUDENT_PASSWORD !== 'undefined') ? DEFAULT_STUDENT_PASSWORD : 'Student@123';
+
+    currentParsedStudents = parseStudentListText(raw, pfx, sfx, startVal);
+    const count = currentParsedStudents.length;
+
+    // Show auto-ID configuration if any pasted entries are names only
+    const hasNameOnly = currentParsedStudents.some(s => s.isNameOnly);
+    if ($('pasteOptRow')) $('pasteOptRow').hidden = !hasNameOnly;
+
+    // Update count badge & action button
+    if ($('parsedCountBadge')) {
+      $('parsedCountBadge').textContent = `${count} student${count === 1 ? '' : 's'} detected`;
+    }
+    const createBtn = $('createPastedBtn');
+    if (createBtn) {
+      createBtn.disabled = count === 0;
+      createBtn.textContent = `Create ${count} Student Account${count === 1 ? '' : 's'}`;
+    }
+
+    // Render Preview Table
+    const wrap = $('pastePreviewWrap');
+    const tbody = $('pastePreviewBody');
+    if (wrap && tbody) {
+      wrap.hidden = count === 0;
+      tbody.innerHTML = currentParsedStudents.map((s, idx) => `
+        <tr>
+          <td>${idx + 1}</td>
+          <td><code>${esc(s.username)}</code></td>
+          <td>${esc(s.full_name || '—')}</td>
+          <td><span class="badge ok">student</span></td>
+          <td><code>${useDefault ? defaultPw : 'Random password'}</code></td>
+        </tr>
+      `).join('');
+    }
+  }
+
+  // Bind live preview listeners
+  ['pasteStudentText', 'pastePrefix', 'pasteStartNo', 'pasteSuffix', 'pasteDefaultPw'].forEach(id => {
+    const el = $(id);
+    if (el) {
+      el.addEventListener('input', updatePastePreview);
+      el.addEventListener('change', updatePastePreview);
+    }
+  });
+
+  // Sample format buttons
+  $('loadSampleIds')?.addEventListener('click', () => {
+    $('pasteStudentText').value = "RU0204/16\nRU0135/16\nRU0436/16";
+    updatePastePreview();
+  });
+  $('loadSampleNames')?.addEventListener('click', () => {
+    $('pasteStudentText').value = "Haile Yilma\nEfrem Mulu\nBegashaw Debebe";
+    updatePastePreview();
+  });
+  $('loadSampleBoth')?.addEventListener('click', () => {
+    $('pasteStudentText').value = "RU0204/16, Haile Yilma\nRU0135/16, Efrem Mulu\nRU0436/16, Begashaw Debebe";
+    updatePastePreview();
+  });
+
+  // File Upload
+  $('uploadStudentFile')?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      $('pasteStudentText').value = evt.target.result;
+      updatePastePreview();
+      toast(`Loaded file: ${file.name}`, 'info');
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  });
+
+  // Clear button
+  $('clearPasteBtn')?.addEventListener('click', () => {
+    $('pasteStudentText').value = '';
+    updatePastePreview();
+  });
+
+  // Pasted List Form Submit
+  $('pasteStudentForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!currentParsedStudents.length) return toast('Please enter or paste at least one student', 'error');
+
+    const useDefault = $('pasteDefaultPw')?.checked !== false;
+    const defaultPw = (typeof DEFAULT_STUDENT_PASSWORD !== 'undefined') ? DEFAULT_STUDENT_PASSWORD : 'Student@123';
+
+    const rows = currentParsedStudents.map(s => ({
+      username: s.username,
+      password: useDefault ? defaultPw : randomPassword(),
+      full_name: s.full_name || '',
+      role: 'student'
+    }));
+
+    const btn = $('createPastedBtn');
+    btn.disabled = true;
+    btn.textContent = 'Creating accounts…';
+
+    try {
+      const results = await executeCreateStudents(rows);
+      const ok = new Set(results.filter(r => r.ok).map(r => r.username.toLowerCase()));
+      const failed = results.filter(r => !r.ok);
+
+      lastCreds = rows.filter(r => ok.has(r.username.toLowerCase()));
+      renderCreds();
+
+      if (failed.length) {
+        toast(`${lastCreds.length} created, ${failed.length} failed: ${failed[0].username} (${failed[0].error})`, 'error');
+      } else {
+        toast(`Successfully created ${lastCreds.length} student account(s)!`, 'success');
+      }
+
+      $('pasteStudentText').value = '';
+      updatePastePreview();
+      await loadStudents();
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = `Create ${currentParsedStudents.length} Student Accounts`;
+    }
+  });
+
+  // =========================================================
+  // SEQUENTIAL AUTO-GENERATOR (MODE 2)
+  // =========================================================
   function buildUsernames(rawPrefix, startVal, rawSuffix, padOption, count) {
     let prefix = String(rawPrefix || '').trim().replace(/\s+/g, '');
     let suffix = String(rawSuffix || '').trim().replace(/\s+/g, '');
     let pad = parseInt(padOption, 10);
 
-    // Smart detection: If user typed e.g. "RU0204/16" into the Prefix field and left Suffix blank
     if (!suffix && prefix.includes('/')) {
       const slashIdx = prefix.lastIndexOf('/');
-      const afterSlash = prefix.slice(slashIdx); // e.g. "/16"
-      const beforeSlash = prefix.slice(0, slashIdx); // e.g. "RU0204"
+      const afterSlash = prefix.slice(slashIdx);
+      const beforeSlash = prefix.slice(0, slashIdx);
       const numMatch = beforeSlash.match(/^(.*?)(\d+)$/);
       if (numMatch) {
         prefix = numMatch[1];
@@ -271,7 +539,6 @@
     }
   });
 
-  // Auto-detect when user pastes e.g. "RU0204/16" directly into prefix
   $('prefix')?.addEventListener('input', e => {
     const val = e.target.value.trim();
     const m = val.match(/^([a-zA-Z_-]+?)(\d+)(\/[a-zA-Z0-9_-]+)$/);
@@ -304,16 +571,17 @@
     const rows = usernames.map((username, i) => ({
       username,
       password: useDefault ? defaultPw : randomPassword(),
-      full_name: names[i] || ''
+      full_name: names[i] || '',
+      role: 'student'
     }));
 
     const btn = $('genBtn');
     btn.disabled = true;
     btn.textContent = 'Creating accounts…';
     try {
-      const data = await callFn({ students: rows });
-      const ok = new Set((data.results || []).filter(r => r.ok).map(r => r.username.toLowerCase()));
-      const failed = (data.results || []).filter(r => !r.ok);
+      const results = await executeCreateStudents(rows);
+      const ok = new Set(results.filter(r => r.ok).map(r => r.username.toLowerCase()));
+      const failed = results.filter(r => !r.ok);
       lastCreds = rows.filter(r => ok.has(r.username.toLowerCase()));
       renderCreds();
       if (failed.length) toast(`${lastCreds.length} created, ${failed.length} failed: ${failed[0].username} (${failed[0].error})`, 'error');

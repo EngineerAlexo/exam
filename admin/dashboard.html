@@ -27,13 +27,92 @@
   <!-- ================= STUDENTS ================= -->
   <section id="tab-students" class="tab-panel">
     <div class="card no-print">
-      <h2>Generate student accounts</h2>
-      <p class="muted">Creates student IDs such as <code>RU0204/16</code> or <code>cs26001</code>. Students must change their password at first login.</p>
-      <form id="genForm" class="grid-2">
+      <div class="row-between" style="margin-top:0; margin-bottom:12px;">
+        <h2 style="margin:0;">Add Students</h2>
+        <div style="display:flex; gap:6px; background:#f1f5f9; padding:4px; border-radius:10px; border:1px solid var(--line);">
+          <button type="button" class="btn btn-sm" id="tabModePaste" style="border-radius:7px; font-weight:600; padding:6px 14px; font-size:12.5px;">📋 Paste List (ID / Name)</button>
+          <button type="button" class="btn btn-sm btn-ghost" id="tabModeGen" style="border-radius:7px; font-weight:600; padding:6px 14px; font-size:12.5px;">🔢 Sequential Generator</button>
+        </div>
+      </div>
+      <p class="muted small" style="margin-top:0; margin-bottom:14px;">
+        Add students by entering exact IDs (e.g. <code>RU0204/16</code>) and names, or paste directly from Excel / text file. No extra numbers are added.
+      </p>
+
+      <!-- MODE 1: PASTE / IMPORT LIST (PRIMARY) -->
+      <form id="pasteStudentForm">
+        <!-- Sample format helper pills -->
+        <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">
+          <span class="muted small" style="font-weight:600; font-size:12px;">Try sample formats:</span>
+          <button type="button" class="btn btn-sm btn-ghost" id="loadSampleIds" style="padding:3px 10px; font-size:11.5px; border-radius:6px;">IDs only (RU0204/16…)</button>
+          <button type="button" class="btn btn-sm btn-ghost" id="loadSampleNames" style="padding:3px 10px; font-size:11.5px; border-radius:6px;">Names only (Haile Yilma…)</button>
+          <button type="button" class="btn btn-sm btn-ghost" id="loadSampleBoth" style="padding:3px 10px; font-size:11.5px; border-radius:6px;">ID + Name (RU0204/16, Haile…)</button>
+        </div>
+
+        <label>Paste Student IDs &amp; Names (one student per line)
+          <textarea id="pasteStudentText" style="min-height:160px; font-family:ui-monospace,SFMono-Regular,monospace; font-size:13.5px;" placeholder="RU0204/16, Haile Yilma&#10;RU0135/16, Efrem Mulu&#10;RU0436/16, Begashaw Debebe&#10;&#10;Or paste just IDs (one per line):&#10;RU0204/16&#10;RU0135/16&#10;RU0436/16&#10;&#10;Or paste just names:&#10;Haile Yilma&#10;Efrem Mulu&#10;Begashaw Debebe"></textarea>
+        </label>
+        
+        <div class="row-between" style="margin-top:8px;">
+          <div class="actions">
+            <label class="btn btn-sm btn-ghost" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px; margin:0;">
+              📂 Upload .csv / .txt <input type="file" id="uploadStudentFile" accept=".csv,.txt" style="display:none;">
+            </label>
+            <button type="button" class="btn btn-sm btn-ghost" id="clearPasteBtn">Clear</button>
+          </div>
+          <div style="font-size:13px; font-weight:600; color:var(--primary);" id="parsedCountBadge">0 students detected</div>
+        </div>
+
+        <!-- Optional Suffix / Prefix row if user only pasted names without IDs -->
+        <div id="pasteOptRow" class="grid-3" style="margin-top:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px;" hidden>
+          <div style="grid-column:1/-1; font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em;">
+            Auto-ID settings (used when lines contain names without an ID):
+          </div>
+          <label style="margin:0; font-size:12.5px;">Prefix
+            <input id="pastePrefix" value="RU" placeholder="e.g. RU or cs26" style="padding:6px 10px; font-size:13px;">
+          </label>
+          <label style="margin:0; font-size:12.5px;">Starting number
+            <input id="pasteStartNo" value="0204" placeholder="e.g. 0204 or 1" style="padding:6px 10px; font-size:13px;">
+          </label>
+          <label style="margin:0; font-size:12.5px;">Suffix / Batch
+            <input id="pasteSuffix" value="/16" placeholder="e.g. /16 or /24" style="padding:6px 10px; font-size:13px;">
+          </label>
+        </div>
+
+        <!-- Live Parsed Preview Table -->
+        <div id="pastePreviewWrap" style="margin-top:14px;" hidden>
+          <div style="font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">
+            Live Preview of accounts that will be created:
+          </div>
+          <div class="table-wrap" style="max-height:220px; overflow-y:auto; border:1px solid var(--line); border-radius:var(--radius-sm);">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:40px;">#</th>
+                  <th>Student ID / Username</th>
+                  <th>Full Name</th>
+                  <th>Role</th>
+                  <th>Password</th>
+                </tr>
+              </thead>
+              <tbody id="pastePreviewBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; flex-wrap:wrap; gap:12px;">
+          <label style="display:flex; align-items:center; gap:8px; margin:0;">
+            <input id="pasteDefaultPw" type="checkbox" style="width:auto" checked> Use default password (<code>Student@123</code>)
+          </label>
+          <button class="btn" id="createPastedBtn" type="submit" disabled>Create 0 Student Accounts</button>
+        </div>
+      </form>
+
+      <!-- MODE 2: SEQUENTIAL AUTO-GENERATOR (OPTIONAL) -->
+      <form id="genForm" class="grid-2" hidden>
         <label>Prefix (e.g. <code>RU</code> or <code>cs26</code>)
           <input id="prefix" value="RU" required placeholder="e.g. RU or cs26">
         </label>
-        <label>Starting number (e.g. <code>0204</code> or <code>5</code>)
+        <label>Starting number (e.g. <code>0204</code> or <code>1</code>)
           <input id="startNo" value="0204" required placeholder="e.g. 0204 or 1">
         </label>
         <label>Suffix / Batch (optional, e.g. <code>/16</code>)
@@ -50,7 +129,7 @@
         <label>How many students
           <input id="count" type="number" value="30" min="1" max="200">
         </label>
-        <label>Full names (optional, one per line – if given, this sets the count)
+        <label>Full names (optional, one per line)
           <textarea id="names" style="min-height:96px" placeholder="Haile Yilma&#10;Ermiyas Yosef&#10;Tofiko Mohammed"></textarea>
         </label>
 

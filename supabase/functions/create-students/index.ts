@@ -48,13 +48,14 @@ Deno.serve(async (req) => {
 
     // ----- reset a student's password -----
     if (body.action === 'reset') {
-      const username = String(body.username ?? '').trim().toLowerCase();
+      const username = String(body.username ?? '').trim();
       const password = String(body.password || DEFAULT_STUDENT_PASSWORD).trim();
       if (password.length < 8) return reply({ error: 'Password must be at least 8 characters.' }, 400);
 
       const { data: target } = await admin.from('profiles')
-        .select('id').eq('username', username).maybeSingle();
+        .select('id, role').ilike('username', username).maybeSingle();
       if (!target) return reply({ error: 'Student not found.' }, 404);
+      if (target.role !== 'student') return reply({ error: 'Cannot reset password for non-student accounts.' }, 403);
 
       const { error } = await admin.auth.admin.updateUserById(target.id, { password });
       if (error) return reply({ error: error.message }, 400);
@@ -66,13 +67,14 @@ Deno.serve(async (req) => {
     // ----- delete student accounts -----
     if (body.action === 'delete') {
       const list = (Array.isArray(body.usernames) ? body.usernames : [body.username])
-        .map((u: string) => String(u || '').trim().toLowerCase())
+        .map((u: string) => String(u || '').trim())
         .filter(Boolean);
 
       if (!list.length) return reply({ error: 'No usernames provided to delete.' }, 400);
 
       const { data: targets, error: tErr } = await admin.from('profiles')
         .select('id, username')
+        .eq('role', 'student')
         .in('username', list);
 
       if (tErr) return reply({ error: tErr.message }, 400);
@@ -93,12 +95,13 @@ Deno.serve(async (req) => {
 
     // ----- create many students -----
     const results: { username: string; ok: boolean; error?: string }[] = [];
-    const list = (body.students ?? []) as { username: string; password?: string; full_name?: string }[];
+    const list = (body.students ?? []) as { username: string; password?: string; full_name?: string; role?: string }[];
 
     for (const s of list) {
       const username = String(s.username).trim();
       const email = `${username.toLowerCase()}@${STUDENT_EMAIL_DOMAIN}`;
       const password = String(s.password || DEFAULT_STUDENT_PASSWORD).trim();
+      const role = s.role || 'student';
 
       const { data, error } = await admin.auth.admin.createUser({
         email,
@@ -114,7 +117,7 @@ Deno.serve(async (req) => {
         id: data.user.id,
         username,
         full_name: s.full_name || null,
-        role: 'student',
+        role: role,
         must_change_password: true,
       });
       if (pErr) {
