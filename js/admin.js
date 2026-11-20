@@ -73,6 +73,23 @@
   // STUDENTS
   // =========================================================
   let lastCreds = [];
+  const selectedStudents = new Set();
+
+  function updateStudentSelectionUI() {
+    const count = selectedStudents.size;
+    const batchBox = $('studentBatchActions');
+    const label = $('selectedCountLabel');
+    const selectAll = $('selectAllStudents');
+
+    if (batchBox) batchBox.hidden = count === 0;
+    if (label) label.textContent = `${count} selected`;
+
+    const allCheckboxes = document.querySelectorAll('.stu-chk');
+    if (selectAll) {
+      selectAll.checked = allCheckboxes.length > 0 && selectedStudents.size === allCheckboxes.length;
+      selectAll.indeterminate = selectedStudents.size > 0 && selectedStudents.size < allCheckboxes.length;
+    }
+  }
 
   async function loadStudents() {
     const { data, error } = await sb.from('profiles')
@@ -80,16 +97,71 @@
       .eq('role', 'student').order('username');
     if (error) return toast(error.message, 'error');
     $('studentCount').textContent = data.length;
+    selectedStudents.clear();
+    updateStudentSelectionUI();
+
     $('studentsBody').innerHTML = data.length ? data.map((s, i) => `
       <tr>
+        <td style="text-align:center;"><input type="checkbox" class="stu-chk" data-username="${esc(s.username)}"></td>
         <td>${i + 1}</td>
         <td><code>${esc(s.username)}</code></td>
-        <td>${esc(s.full_name)}</td>
+        <td>${esc(s.full_name || '—')}</td>
         <td>${s.must_change_password ? '<span class="badge warn">Must change password</span>' : '<span class="badge ok">Active</span>'}</td>
         <td>${fmt(s.created_at)}</td>
-        <td><button class="btn btn-sm btn-ghost" data-reset="${esc(s.username)}">Reset password</button></td>
-      </tr>`).join('') : '<tr><td colspan="6" class="muted">No students yet</td></tr>';
+        <td class="actions" style="justify-content:flex-end;">
+          <button class="btn btn-sm btn-ghost" data-reset="${esc(s.username)}">Reset password</button>
+          <button class="btn btn-sm btn-danger" data-del-stu="${esc(s.username)}" title="Delete student">Delete</button>
+        </td>
+      </tr>`).join('') : '<tr><td colspan="7" class="muted">No students yet</td></tr>';
   }
+
+  $('selectAllStudents').onchange = (e) => {
+    const checked = e.target.checked;
+    document.querySelectorAll('.stu-chk').forEach(chk => {
+      chk.checked = checked;
+      const u = chk.dataset.username;
+      if (checked) selectedStudents.add(u);
+      else selectedStudents.delete(u);
+    });
+    updateStudentSelectionUI();
+  };
+
+  $('studentsBody').onchange = (e) => {
+    const chk = e.target.closest('.stu-chk');
+    if (!chk) return;
+    const u = chk.dataset.username;
+    if (chk.checked) selectedStudents.add(u);
+    else selectedStudents.delete(u);
+    updateStudentSelectionUI();
+  };
+
+  async function deleteStudentAccounts(usernames) {
+    if (!usernames || !usernames.length) return;
+    const count = usernames.length;
+    const msg = count === 1
+      ? `Permanently delete student account "${usernames[0]}"? This cannot be undone.`
+      : `Permanently delete ${count} selected student account(s)? This cannot be undone.`;
+
+    if (!confirm(msg)) return;
+
+    try {
+      try {
+        await callFn({ action: 'delete', usernames });
+      } catch (fnErr) {
+        console.warn('callFn delete error, falling back to direct profile delete:', fnErr);
+        await sb.from('profiles').delete().in('username', usernames);
+      }
+      toast(`Deleted ${count} student account(s)`, 'success');
+      selectedStudents.clear();
+      await loadStudents();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  }
+
+  $('deleteSelectedStudentsBtn').onclick = () => {
+    deleteStudentAccounts(Array.from(selectedStudents));
+  };
 
   function renderCreds() {
     $('credBox').hidden = !lastCreds.length;
@@ -210,10 +282,16 @@
   };
 
   $('studentsBody').onclick = async e => {
-    const b = e.target.closest('button[data-reset]');
-    if (!b) return;
-    const username = b.dataset.reset;
-    openResetModal(username);
+    const resetBtn = e.target.closest('button[data-reset]');
+    if (resetBtn) {
+      openResetModal(resetBtn.dataset.reset);
+      return;
+    }
+    const delBtn = e.target.closest('button[data-del-stu]');
+    if (delBtn) {
+      deleteStudentAccounts([delBtn.dataset.delStu]);
+      return;
+    }
   };
 
   // =========================================================
@@ -357,32 +435,140 @@
     loadQuestions();
   };
 
+  let questionsCache = [];
+
+  function openEditQModal(id) {
+    const q = questionsCache.find(x => x.id === id);
+    if (!q) return toast('Question not found', 'error');
+    const ak = Array.isArray(q.answer_keys) ? q.answer_keys[0] : q.answer_keys;
+
+    $('editQId').value = q.id;
+    $('editQPos').value = q.position;
+    $('editQText').value = q.question_text || '';
+    $('editQOptA').value = q.option_a || '';
+    $('editQOptB').value = q.option_b || '';
+    $('editQOptC').value = q.option_c || '';
+    $('editQOptD').value = q.option_d || '';
+    $('editQAnswer').value = ak?.correct_option || 'A';
+
+    $('saveEditQBtn').disabled = false;
+    $('saveEditQBtn').textContent = 'Save Changes';
+    $('editQModal').hidden = false;
+  }
+
+  function closeEditQModal() {
+    $('editQModal').hidden = true;
+  }
+
+  $('closeEditQModal').onclick = closeEditQModal;
+  $('cancelEditQBtn').onclick = closeEditQModal;
+
+  $('editQForm').onsubmit = async e => {
+    e.preventDefault();
+    const id = $('editQId').value;
+    const pos = Number($('editQPos').value) || 1;
+    const text = $('editQText').value.trim();
+    const optA = $('editQOptA').value.trim();
+    const optB = $('editQOptB').value.trim();
+    const optC = $('editQOptC').value.trim();
+    const optD = $('editQOptD').value.trim();
+    const answer = $('editQAnswer').value;
+
+    if (!text || !optA || !optB || !optC || !optD) {
+      return toast('Please enter the question text and all 4 options', 'error');
+    }
+
+    const btn = $('saveEditQBtn');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+
+    const { error: qErr } = await sb.from('questions').update({
+      position: pos,
+      question_text: text,
+      option_a: optA,
+      option_b: optB,
+      option_c: optC,
+      option_d: optD
+    }).eq('id', id);
+
+    if (qErr) {
+      btn.disabled = false;
+      btn.textContent = 'Save Changes';
+      return toast(qErr.message, 'error');
+    }
+
+    const { error: kErr } = await sb.from('answer_keys').upsert({
+      question_id: id,
+      correct_option: answer
+    });
+
+    if (kErr) {
+      btn.disabled = false;
+      btn.textContent = 'Save Changes';
+      return toast(kErr.message, 'error');
+    }
+
+    toast('Question updated successfully!', 'success');
+    closeEditQModal();
+    loadQuestions();
+  };
+
   async function loadQuestions() {
     const examId = $('qExam').value;
     if (!examId) { $('qTable').innerHTML = ''; $('qCount').textContent = 0; return; }
     const { data, error } = await sb.from('questions')
-      .select('id, position, question_text, answer_keys(correct_option)')
+      .select('id, position, question_text, option_a, option_b, option_c, option_d, answer_keys(correct_option)')
       .eq('exam_id', examId).order('position');
     if (error) return toast(error.message, 'error');
-    $('qCount').textContent = data.length;
-    $('qTable').innerHTML = data.map(q => {
+    questionsCache = data || [];
+    $('qCount').textContent = questionsCache.length;
+
+    $('qTable').innerHTML = questionsCache.map(q => {
       const ak = Array.isArray(q.answer_keys) ? q.answer_keys[0] : q.answer_keys;
+      const ans = ak?.correct_option ?? '?';
       return `<tr>
-        <td>${q.position}</td>
-        <td>${esc(q.question_text)}</td>
-        <td><span class="badge ok">${esc(ak?.correct_option ?? '?')}</span></td>
-        <td><button class="btn btn-sm btn-danger" data-del="${q.id}">Delete</button></td>
+        <td style="font-weight:700;">${q.position}</td>
+        <td>
+          <div style="font-weight:600; margin-bottom:8px; line-height:1.4;">${esc(q.question_text)}</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; font-size:12.5px;">
+            <div style="padding:4px 8px; border-radius:6px; background:${ans === 'A' ? 'var(--ok-bg)' : '#f8fafc'}; border:1px solid ${ans === 'A' ? 'var(--ok-border)' : 'var(--line)'}; color:${ans === 'A' ? 'var(--ok)' : 'var(--ink)'};">
+              <b>A:</b> ${esc(q.option_a || '—')}
+            </div>
+            <div style="padding:4px 8px; border-radius:6px; background:${ans === 'B' ? 'var(--ok-bg)' : '#f8fafc'}; border:1px solid ${ans === 'B' ? 'var(--ok-border)' : 'var(--line)'}; color:${ans === 'B' ? 'var(--ok)' : 'var(--ink)'};">
+              <b>B:</b> ${esc(q.option_b || '—')}
+            </div>
+            <div style="padding:4px 8px; border-radius:6px; background:${ans === 'C' ? 'var(--ok-bg)' : '#f8fafc'}; border:1px solid ${ans === 'C' ? 'var(--ok-border)' : 'var(--line)'}; color:${ans === 'C' ? 'var(--ok)' : 'var(--ink)'};">
+              <b>C:</b> ${esc(q.option_c || '—')}
+            </div>
+            <div style="padding:4px 8px; border-radius:6px; background:${ans === 'D' ? 'var(--ok-bg)' : '#f8fafc'}; border:1px solid ${ans === 'D' ? 'var(--ok-border)' : 'var(--line)'}; color:${ans === 'D' ? 'var(--ok)' : 'var(--ink)'};">
+              <b>D:</b> ${esc(q.option_d || '—')}
+            </div>
+          </div>
+        </td>
+        <td><span class="badge ok" style="font-size:13px; font-weight:700;">${esc(ans)}</span></td>
+        <td class="actions" style="justify-content:flex-end; white-space:nowrap;">
+          <button class="btn btn-sm btn-ghost" data-edit="${q.id}">Edit</button>
+          <button class="btn btn-sm btn-danger" data-del="${q.id}">Delete</button>
+        </td>
       </tr>`;
     }).join('') || '<tr><td colspan="4" class="muted">No questions yet</td></tr>';
   }
 
   $('qExam').onchange = loadQuestions;
   $('qTable').onclick = async e => {
-    const id = e.target.closest('button[data-del]')?.dataset.del;
-    if (!id || !confirm('Delete this question?')) return;
-    const { error } = await sb.from('questions').delete().eq('id', id);
-    if (error) toast(error.message, 'error');
-    loadQuestions();
+    const editBtn = e.target.closest('button[data-edit]');
+    if (editBtn) {
+      openEditQModal(editBtn.dataset.edit);
+      return;
+    }
+    const delBtn = e.target.closest('button[data-del]');
+    if (delBtn) {
+      const id = delBtn.dataset.del;
+      if (!confirm('Delete this question?')) return;
+      const { error } = await sb.from('questions').delete().eq('id', id);
+      if (error) toast(error.message, 'error');
+      loadQuestions();
+    }
   };
 
   // =========================================================

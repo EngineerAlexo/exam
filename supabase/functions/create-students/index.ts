@@ -63,6 +63,34 @@ Deno.serve(async (req) => {
       return reply({ ok: true, password });
     }
 
+    // ----- delete student accounts -----
+    if (body.action === 'delete') {
+      const list = (Array.isArray(body.usernames) ? body.usernames : [body.username])
+        .map((u: string) => String(u || '').trim().toLowerCase())
+        .filter(Boolean);
+
+      if (!list.length) return reply({ error: 'No usernames provided to delete.' }, 400);
+
+      const { data: targets, error: tErr } = await admin.from('profiles')
+        .select('id, username')
+        .in('username', list);
+
+      if (tErr) return reply({ error: tErr.message }, 400);
+
+      const deleted: string[] = [];
+      for (const t of targets || []) {
+        try {
+          await admin.auth.admin.deleteUser(t.id);
+        } catch (delErr) {
+          console.warn('deleteUser auth error:', delErr);
+        }
+        await admin.from('profiles').delete().eq('id', t.id);
+        deleted.push(t.username);
+      }
+
+      return reply({ ok: true, deleted });
+    }
+
     // ----- create many students -----
     const results: { username: string; ok: boolean; error?: string }[] = [];
     const list = (body.students ?? []) as { username: string; password?: string; full_name?: string }[];
