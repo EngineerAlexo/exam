@@ -206,20 +206,103 @@
       <td><code>${esc(c.password)}</code></td><td>${esc(c.full_name)}</td></tr>`).join('');
   }
 
+  function buildUsernames(rawPrefix, startVal, rawSuffix, padOption, count) {
+    let prefix = String(rawPrefix || '').trim().replace(/\s+/g, '');
+    let suffix = String(rawSuffix || '').trim().replace(/\s+/g, '');
+    let pad = parseInt(padOption, 10);
+
+    // Smart detection: If user typed e.g. "RU0204/16" into the Prefix field and left Suffix blank
+    if (!suffix && prefix.includes('/')) {
+      const slashIdx = prefix.lastIndexOf('/');
+      const afterSlash = prefix.slice(slashIdx); // e.g. "/16"
+      const beforeSlash = prefix.slice(0, slashIdx); // e.g. "RU0204"
+      const numMatch = beforeSlash.match(/^(.*?)(\d+)$/);
+      if (numMatch) {
+        prefix = numMatch[1];
+        if (!startVal || startVal === '1' || startVal === '0204') {
+          startVal = numMatch[2];
+        }
+        suffix = afterSlash;
+        if (isNaN(pad) || pad === 0) {
+          pad = numMatch[2].length;
+        }
+      } else {
+        suffix = afterSlash;
+        prefix = beforeSlash;
+      }
+    }
+
+    const startStr = String(startVal || '1').trim();
+    const startNum = parseInt(startStr, 10) || 1;
+
+    if (isNaN(pad)) {
+      pad = startStr.length > 1 ? startStr.length : 4;
+    }
+
+    const list = [];
+    for (let i = 0; i < count; i++) {
+      const num = startNum + i;
+      const numStr = pad > 0 ? String(num).padStart(pad, '0') : String(num);
+      list.push(`${prefix}${numStr}${suffix}`);
+    }
+    return list;
+  }
+
+  function updateUsernamePreview() {
+    const p = $('prefix')?.value || 'RU';
+    const startVal = $('startNo')?.value || '0204';
+    const s = $('suffix')?.value || '';
+    const pad = $('padDigits')?.value || '4';
+    const names = $('names')?.value.split('\n').map(x => x.trim()).filter(Boolean) || [];
+    const count = names.length || Number($('count')?.value) || 3;
+
+    const samples = buildUsernames(p, startVal, s, pad, Math.min(count, 4));
+    const more = count > 4 ? ` … (+${count - 4} more)` : '';
+    if ($('usernamePreview')) {
+      $('usernamePreview').textContent = samples.length ? samples.join(', ') + more : '—';
+    }
+  }
+
+  ['prefix', 'startNo', 'suffix', 'padDigits', 'count', 'names'].forEach(id => {
+    const el = $(id);
+    if (el) {
+      el.addEventListener('input', updateUsernamePreview);
+      el.addEventListener('change', updateUsernamePreview);
+    }
+  });
+
+  // Auto-detect when user pastes e.g. "RU0204/16" directly into prefix
+  $('prefix')?.addEventListener('input', e => {
+    const val = e.target.value.trim();
+    const m = val.match(/^([a-zA-Z_-]+?)(\d+)(\/[a-zA-Z0-9_-]+)$/);
+    if (m) {
+      $('prefix').value = m[1];
+      $('startNo').value = m[2];
+      $('suffix').value = m[3];
+      if ($('padDigits')) $('padDigits').value = String(m[2].length);
+      updateUsernamePreview();
+    }
+  });
+
   $('genForm').onsubmit = async e => {
     e.preventDefault();
-    const prefix = $('prefix').value.trim().toLowerCase().replace(/\s+/g, '');
-    const start = Math.max(1, Number($('startNo').value) || 1);
+    const rawPrefix = $('prefix').value;
+    const startVal = $('startNo').value;
+    const rawSuffix = $('suffix')?.value || '';
+    const padOption = $('padDigits')?.value || '4';
+
     const names = $('names').value.split('\n').map(s => s.trim()).filter(Boolean);
     const count = names.length || Number($('count').value) || 0;
-    if (!prefix) return toast('Enter a username prefix', 'error');
+    if (!rawPrefix && !startVal) return toast('Enter a prefix or starting number', 'error');
     if (count < 1 || count > 200) return toast('Create between 1 and 200 students at a time', 'error');
+
+    const usernames = buildUsernames(rawPrefix, startVal, rawSuffix, padOption, count);
 
     const useDefault = $('useDefaultPw')?.checked;
     const defaultPw = (typeof DEFAULT_STUDENT_PASSWORD !== 'undefined') ? DEFAULT_STUDENT_PASSWORD : 'Student@123';
 
-    const rows = Array.from({ length: count }, (_, i) => ({
-      username: prefix + String(start + i).padStart(3, '0'),
+    const rows = usernames.map((username, i) => ({
+      username,
       password: useDefault ? defaultPw : randomPassword(),
       full_name: names[i] || ''
     }));
@@ -229,12 +312,12 @@
     btn.textContent = 'Creating accounts…';
     try {
       const data = await callFn({ students: rows });
-      const ok = new Set(data.results.filter(r => r.ok).map(r => r.username));
-      const failed = data.results.filter(r => !r.ok);
-      lastCreds = rows.filter(r => ok.has(r.username));
+      const ok = new Set((data.results || []).filter(r => r.ok).map(r => r.username.toLowerCase()));
+      const failed = (data.results || []).filter(r => !r.ok);
+      lastCreds = rows.filter(r => ok.has(r.username.toLowerCase()));
       renderCreds();
       if (failed.length) toast(`${lastCreds.length} created, ${failed.length} failed: ${failed[0].username} (${failed[0].error})`, 'error');
-      else toast(`${lastCreds.length} accounts created`, 'success');
+      else toast(`${lastCreds.length} accounts created successfully`, 'success');
       loadStudents();
     } catch (err) {
       toast(err.message, 'error');
@@ -414,7 +497,7 @@
           <div class="pv">
             <div><strong>${i + 1}. ${esc(q.text)}</strong></div>
             ${['A', 'B', 'C', 'D'].map(L =>
-              `<div class="${q.answer === L ? 'pv-correct' : ''}">${L}. ${esc(q.options[L] || '—')}</div>`).join('')}
+      `<div class="${q.answer === L ? 'pv-correct' : ''}">${L}. ${esc(q.options[L] || '—')}</div>`).join('')}
             <div class="small muted">Answer: ${esc(q.answer || '?')}</div>
           </div>`).join('')}
       </div>`;
@@ -637,7 +720,7 @@
     $('resBody').innerHTML = rows.map((r, i) => {
       const badge = !r.submitted_at ? '<span class="badge">In progress</span>'
         : Number(r.percentage) >= Number(exam.pass_mark) ? '<span class="badge ok">Passed</span>'
-        : '<span class="badge bad">Failed</span>';
+          : '<span class="badge bad">Failed</span>';
       return `<tr>
         <td>${i + 1}</td>
         <td><code>${esc(r.profiles?.username)}</code></td>
@@ -664,6 +747,7 @@
   };
 
   // ---------- initial load ----------
+  updateUsernamePreview();
   await loadStudents();
   await loadExams();
 })();

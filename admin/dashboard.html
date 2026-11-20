@@ -28,22 +28,44 @@
   <section id="tab-students" class="tab-panel">
     <div class="card no-print">
       <h2>Generate student accounts</h2>
-      <p class="muted">Creates usernames such as <code>cs26001</code> with random passwords. Students must change their password at first login.</p>
+      <p class="muted">Creates student IDs such as <code>RU0204/16</code> or <code>cs26001</code>. Students must change their password at first login.</p>
       <form id="genForm" class="grid-2">
-        <label>Username prefix
-          <input id="prefix" value="cs26" required>
+        <label>Prefix (e.g. <code>RU</code> or <code>cs26</code>)
+          <input id="prefix" value="RU" required placeholder="e.g. RU or cs26">
         </label>
-        <label>Starting number
-          <input id="startNo" type="number" value="1" min="1">
+        <label>Starting number (e.g. <code>0204</code> or <code>5</code>)
+          <input id="startNo" value="0204" required placeholder="e.g. 0204 or 1">
+        </label>
+        <label>Suffix / Batch (optional, e.g. <code>/16</code>)
+          <input id="suffix" value="/16" placeholder="e.g. /16 or /24 (optional)">
+        </label>
+        <label>Number digits (padding)
+          <select id="padDigits">
+            <option value="4" selected>4 digits (e.g. 0204, 0205)</option>
+            <option value="3">3 digits (e.g. 001, 002)</option>
+            <option value="5">5 digits (e.g. 00204)</option>
+            <option value="0">No leading zeros (e.g. 5, 6, 7)</option>
+          </select>
         </label>
         <label>How many students
           <input id="count" type="number" value="30" min="1" max="200">
         </label>
         <label>Full names (optional, one per line – if given, this sets the count)
-          <textarea id="names" style="min-height:96px"></textarea>
+          <textarea id="names" style="min-height:96px" placeholder="Haile Yilma&#10;Ermiyas Yosef&#10;Tofiko Mohammed"></textarea>
         </label>
+
+        <!-- Live Preview Box -->
+        <div style="grid-column:1/-1; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:14px 18px;">
+          <div style="font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; font-weight:600; margin-bottom:4px;">
+            Live Preview of usernames that will be created:
+          </div>
+          <div id="usernamePreview" style="font-family:ui-monospace,SFMono-Regular,monospace; font-weight:700; color:var(--primary); font-size:14.5px; word-break:break-all;">
+            RU0204/16, RU0205/16, RU0206/16…
+          </div>
+        </div>
+
         <label style="display:flex;align-items:center;gap:8px;grid-column:1/-1;">
-          <input id="useDefaultPw" type="checkbox" style="width:auto"> Use default password (<code>Student@123</code>) for all new accounts
+          <input id="useDefaultPw" type="checkbox" style="width:auto" checked> Use default password (<code>Student@123</code>) for all new accounts
         </label>
         <div style="grid-column:1/-1">
           <button class="btn" id="genBtn" type="submit">Generate accounts</button>

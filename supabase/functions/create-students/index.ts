@@ -96,11 +96,12 @@ Deno.serve(async (req) => {
     const list = (body.students ?? []) as { username: string; password?: string; full_name?: string }[];
 
     for (const s of list) {
-      const username = String(s.username).trim().toLowerCase();
+      const username = String(s.username).trim();
+      const email = `${username.toLowerCase()}@${STUDENT_EMAIL_DOMAIN}`;
       const password = String(s.password || DEFAULT_STUDENT_PASSWORD).trim();
 
       const { data, error } = await admin.auth.admin.createUser({
-        email: `${username}@${STUDENT_EMAIL_DOMAIN}`,
+        email,
         password,
         email_confirm: true,
       });

@@ -30,3 +30,4 @@ begin
 
   return deleted;
 end $$;
+
