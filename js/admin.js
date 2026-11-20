@@ -144,19 +144,55 @@
 
     if (!confirm(msg)) return;
 
+    let deletedCount = 0;
+
+    // 1. Try database RPC delete_student_accounts (fastest & purges both auth.users and profiles)
     try {
-      try {
-        await callFn({ action: 'delete', usernames });
-      } catch (fnErr) {
-        console.warn('callFn delete error, falling back to direct profile delete:', fnErr);
-        await sb.from('profiles').delete().in('username', usernames);
+      const { data: rpcData, error: rpcErr } = await sb.rpc('delete_student_accounts', { p_usernames: usernames });
+      if (!rpcErr && Array.isArray(rpcData) && rpcData.length > 0) {
+        deletedCount = rpcData.length;
       }
-      toast(`Deleted ${count} student account(s)`, 'success');
-      selectedStudents.clear();
-      await loadStudents();
-    } catch (err) {
-      toast(err.message, 'error');
+    } catch (e) {
+      console.warn('RPC delete error:', e);
     }
+
+    // 2. If RPC is not installed, try Edge Function (verifying it actually returned deleted array)
+    if (deletedCount === 0) {
+      try {
+        const fnRes = await callFn({ action: 'delete', usernames });
+        if (fnRes && fnRes.ok && Array.isArray(fnRes.deleted) && fnRes.deleted.length > 0) {
+          deletedCount = fnRes.deleted.length;
+        }
+      } catch (fnErr) {
+        console.warn('callFn delete error:', fnErr);
+      }
+    }
+
+    // 3. Direct delete from public.profiles table (immediately removes from dashboard & database)
+    if (deletedCount === 0) {
+      try {
+        const { data: delProfiles, error: pErr } = await sb.from('profiles')
+          .delete()
+          .in('username', usernames)
+          .select('username');
+
+        if (pErr) {
+          return toast('Delete failed: ' + pErr.message, 'error');
+        }
+        deletedCount = delProfiles?.length || 0;
+      } catch (pEx) {
+        return toast('Delete failed: ' + pEx.message, 'error');
+      }
+    }
+
+    if (deletedCount > 0) {
+      toast(`Successfully deleted ${deletedCount} student account(s)`, 'success');
+    } else {
+      toast('Could not delete the selected students. Please ensure you are logged in as admin.', 'error');
+    }
+
+    selectedStudents.clear();
+    await loadStudents();
   }
 
   $('deleteSelectedStudentsBtn').onclick = () => {

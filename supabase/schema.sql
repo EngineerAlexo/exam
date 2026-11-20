@@ -201,6 +201,32 @@ as $$
   update profiles set must_change_password = false where id = auth.uid();
 $$;
 
+-- Permanently deletes student accounts from auth.users and profiles
+create or replace function delete_student_accounts(p_usernames text[])
+returns text[]
+language plpgsql security definer set search_path = public, auth
+as $$
+declare
+  u text;
+  v_id uuid;
+  deleted text[] := array[]::text[];
+begin
+  if not is_admin() then
+    raise exception 'Admins only.';
+  end if;
+
+  foreach u in array p_usernames loop
+    select id into v_id from profiles where username = lower(trim(u)) and role = 'student';
+    if found then
+      delete from auth.users where id = v_id;
+      delete from profiles where id = v_id;
+      deleted := array_append(deleted, u);
+    end if;
+  end loop;
+
+  return deleted;
+end $$;
+
 -- ---------- 5. CREATE THE ADMIN ACCOUNT (run after creating the user, see README) ----------
 -- Example (edit the email):
 -- insert into profiles (id, username, full_name, role, must_change_password)
