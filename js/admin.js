@@ -87,9 +87,12 @@
     if (!prefix) return toast('Enter a username prefix', 'error');
     if (count < 1 || count > 200) return toast('Create between 1 and 200 students at a time', 'error');
 
+    const useDefault = $('useDefaultPw')?.checked;
+    const defaultPw = (typeof DEFAULT_STUDENT_PASSWORD !== 'undefined') ? DEFAULT_STUDENT_PASSWORD : 'Student@123';
+
     const rows = Array.from({ length: count }, (_, i) => ({
       username: prefix + String(start + i).padStart(3, '0'),
-      password: randomPassword(),
+      password: useDefault ? defaultPw : randomPassword(),
       full_name: names[i] || ''
     }));
 
@@ -117,20 +120,80 @@
     [['Username', 'Password', 'Full name'], ...lastCreds.map(c => [c.username, c.password, c.full_name])]);
   $('printCreds').onclick = () => window.print();
 
+  // Reset password modal handlers
+  let targetResetUsername = '';
+  const defaultPw = (typeof DEFAULT_STUDENT_PASSWORD !== 'undefined') ? DEFAULT_STUDENT_PASSWORD : 'Student@123';
+
+  function openResetModal(username) {
+    targetResetUsername = username;
+    $('resetStudentName').textContent = username;
+    $('resetPasswordInput').value = defaultPw;
+    $('resetFormContainer').hidden = false;
+    $('resetSuccessBox').hidden = true;
+    $('confirmResetBtn').disabled = false;
+    $('confirmResetBtn').textContent = 'Reset to Default Password';
+    $('resetModal').hidden = false;
+  }
+
+  function closeResetModal() {
+    $('resetModal').hidden = true;
+    targetResetUsername = '';
+  }
+
+  $('closeResetModal').onclick = closeResetModal;
+  $('cancelResetBtn').onclick = closeResetModal;
+
+  $('copyDefaultPwBtn').onclick = () => {
+    const pw = $('resetPasswordInput').value;
+    navigator.clipboard.writeText(pw);
+    toast('Default password copied!', 'info');
+  };
+
+  $('resetForm').onsubmit = async e => {
+    e.preventDefault();
+    if (!targetResetUsername) return;
+    const password = $('resetPasswordInput').value.trim() || defaultPw;
+    if (password.length < 8) return toast('Password must be at least 8 characters', 'error');
+
+    const btn = $('confirmResetBtn');
+    btn.disabled = true;
+    btn.textContent = 'Resetting password…';
+
+    try {
+      await callFn({ action: 'reset', username: targetResetUsername, password });
+      // Ensure the must_change_password flag is set in the profiles table as well
+      await sb.from('profiles').update({ must_change_password: true }).eq('username', targetResetUsername);
+
+      $('resSuccessUser').textContent = targetResetUsername;
+      $('resSuccessPw').textContent = password;
+      $('resetFormContainer').hidden = true;
+      $('resetSuccessBox').hidden = false;
+
+      lastCreds = [{ username: targetResetUsername, password, full_name: '' }];
+      renderCreds();
+      await loadStudents();
+      toast(`Password for ${targetResetUsername} reset to default!`, 'success');
+    } catch (err) {
+      toast(err.message, 'error');
+      btn.disabled = false;
+      btn.textContent = 'Reset to Default Password';
+    }
+  };
+
+  $('copyCredsDoneBtn').onclick = () => {
+    const u = $('resSuccessUser').textContent;
+    const p = $('resSuccessPw').textContent;
+    const text = `Username: ${u}\nDefault Password: ${p}`;
+    navigator.clipboard.writeText(text);
+    toast('Credentials copied to clipboard!', 'success');
+    closeResetModal();
+  };
+
   $('studentsBody').onclick = async e => {
     const b = e.target.closest('button[data-reset]');
     if (!b) return;
     const username = b.dataset.reset;
-    if (!confirm(`Reset the password for ${username}? The student must change it at next login.`)) return;
-    const password = randomPassword();
-    try {
-      await callFn({ action: 'reset', username, password });
-      lastCreds = [{ username, password, full_name: '' }];
-      renderCreds();
-      toast('Password reset. Copy it now.', 'success');
-    } catch (err) {
-      toast(err.message, 'error');
-    }
+    openResetModal(username);
   };
 
   // =========================================================

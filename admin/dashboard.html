@@ -42,6 +42,9 @@
         <label>Full names (optional, one per line – if given, this sets the count)
           <textarea id="names" style="min-height:96px"></textarea>
         </label>
+        <label style="display:flex;align-items:center;gap:8px;grid-column:1/-1;">
+          <input id="useDefaultPw" type="checkbox" style="width:auto"> Use default password (<code>Student@123</code>) for all new accounts
+        </label>
         <div style="grid-column:1/-1">
           <button class="btn" id="genBtn" type="submit">Generate accounts</button>
         </div>
@@ -159,6 +162,52 @@ Answer: B</pre>
     </div>
   </section>
 </main>
+
+<!-- Reset Password Modal -->
+<div class="overlay" id="resetModal" hidden>
+  <div class="overlay-card" style="text-align:left; max-width:480px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+      <h3 style="margin:0; font-size:18px;">Reset Student Password</h3>
+      <button type="button" class="btn btn-sm btn-ghost" id="closeResetModal" style="padding:4px 8px; border-radius:6px; font-size:14px;">✕</button>
+    </div>
+
+    <div id="resetFormContainer">
+      <p class="muted small" style="margin-top:0; margin-bottom:16px;">
+        Reset password for student <b id="resetStudentName" style="color:var(--ink);"></b>.
+      </p>
+
+      <form id="resetForm" class="stack" style="margin-top:0;">
+        <label>Default Password (given to student)
+          <div style="display:flex; gap:8px;">
+            <input id="resetPasswordInput" required minlength="8" value="Student@123" style="font-family:ui-monospace,SFMono-Regular,monospace; font-weight:600;">
+            <button type="button" class="btn btn-ghost" id="copyDefaultPwBtn" title="Copy to clipboard">📋</button>
+          </div>
+        </label>
+        <div class="notice" style="margin:8px 0 16px; font-size:13px; line-height:1.45;">
+          🔒 Once reset, the student <b>must change this password</b> upon logging in before they can access their dashboard or exams.
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+          <button type="button" class="btn btn-ghost" id="cancelResetBtn">Cancel</button>
+          <button type="submit" class="btn" id="confirmResetBtn">Reset to Default Password</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="resetSuccessBox" hidden style="text-align:center;">
+      <div style="font-size:36px; margin-bottom:8px;">✅</div>
+      <h3 style="margin:0 0 8px; font-size:18px;">Password Reset Successfully!</h3>
+      <p class="muted small" style="margin-bottom:14px;">Give these credentials to the student:</p>
+      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:14px; text-align:left; margin-bottom:16px;">
+        <div style="font-size:13.5px; margin-bottom:6px;"><b>Username:</b> <code id="resSuccessUser"></code></div>
+        <div style="font-size:13.5px;"><b>Default Password:</b> <code id="resSuccessPw"></code></div>
+      </div>
+      <p class="notice" style="font-size:12.5px; text-align:left; margin-bottom:16px;">
+        The student will be automatically forced to create a new password on their next sign in.
+      </p>
+      <button type="button" class="btn btn-block" id="copyCredsDoneBtn">📋 Copy Credentials & Close</button>
+    </div>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="../js/config.js"></script>

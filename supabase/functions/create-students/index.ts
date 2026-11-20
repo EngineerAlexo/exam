@@ -7,6 +7,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 // Must match STUDENT_EMAIL_DOMAIN in js/config.js
 const STUDENT_EMAIL_DOMAIN = 'students.examportal.app';
+const DEFAULT_STUDENT_PASSWORD = 'Student@123';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -48,7 +49,7 @@ Deno.serve(async (req) => {
     // ----- reset a student's password -----
     if (body.action === 'reset') {
       const username = String(body.username ?? '').trim().toLowerCase();
-      const password = String(body.password ?? '');
+      const password = String(body.password || DEFAULT_STUDENT_PASSWORD).trim();
       if (password.length < 8) return reply({ error: 'Password must be at least 8 characters.' }, 400);
 
       const { data: target } = await admin.from('profiles')
@@ -59,19 +60,20 @@ Deno.serve(async (req) => {
       if (error) return reply({ error: error.message }, 400);
 
       await admin.from('profiles').update({ must_change_password: true }).eq('id', target.id);
-      return reply({ ok: true });
+      return reply({ ok: true, password });
     }
 
     // ----- create many students -----
     const results: { username: string; ok: boolean; error?: string }[] = [];
-    const list = (body.students ?? []) as { username: string; password: string; full_name?: string }[];
+    const list = (body.students ?? []) as { username: string; password?: string; full_name?: string }[];
 
     for (const s of list) {
       const username = String(s.username).trim().toLowerCase();
+      const password = String(s.password || DEFAULT_STUDENT_PASSWORD).trim();
 
       const { data, error } = await admin.auth.admin.createUser({
         email: `${username}@${STUDENT_EMAIL_DOMAIN}`,
-        password: s.password,
+        password,
         email_confirm: true,
       });
       if (error || !data.user) {

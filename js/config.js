@@ -10,5 +10,8 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // Must match STUDENT_EMAIL_DOMAIN in supabase/functions/create-students/index.ts
 const STUDENT_EMAIL_DOMAIN = 'students.examportal.app';
 
+// Default password assigned when admin resets a password (or creates accounts)
+const DEFAULT_STUDENT_PASSWORD = 'Student@123';
+
 // Warnings (leaving full-screen / switching tabs) before the exam auto-submits
 const EXAM_MAX_VIOLATIONS = 3;
