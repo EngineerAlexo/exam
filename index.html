@@ -11,7 +11,10 @@
 </head>
 <body class="center-page">
 <main class="login-card">
-  <div class="brand-mark">🎓</div>
+  <div class="brand-logo-wrap">
+    <img src="assets/logo.jpg" alt="Logo" class="login-logo" onerror="this.style.display='none'; document.getElementById('fallbackBrandMark').style.display='grid';">
+    <div class="brand-mark" id="fallbackBrandMark" style="display:none;">🎓</div>
+  </div>
   <h1>Online Examination System</h1>
   <p class="muted">Sign in with the username and password given by your administrator.</p>
   <form id="loginForm" class="stack">

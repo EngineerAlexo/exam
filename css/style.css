@@ -186,6 +186,23 @@ h1, h2, h3, h4 {
   text-align: center;
 }
 
+.brand-logo-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+
+.login-logo {
+  max-width: 140px;
+  max-height: 80px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  border-radius: 10px;
+}
+
 .brand-mark {
   width: 54px;
   height: 54px;
